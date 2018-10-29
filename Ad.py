@@ -9,7 +9,7 @@ from selenium.common.exceptions import TimeoutException, StaleElementReferenceEx
 from selenium.webdriver.common.by import By
 from dateparser import parser
 from datetime import datetime, timedelta
-from Configuration import Configuration
+from Configuration import Configuration, Keys
 
 class AdWatcher():
     r"""Handles the watching of ads for a specific player."""
@@ -32,26 +32,26 @@ class AdWatcher():
         self.config = config
         self.log_info("New ad watcher({}). "
                       "Statistics: Fulfilled({}), Unfilled({}), Limit reached({})".format(
-            self.player[Configuration.UUID],
-            self.player[Configuration.STATS][Configuration.FULFILLED],
-            self.player[Configuration.STATS][Configuration.UNFILLED],
-            self.player[Configuration.STATS][Configuration.LIMIT_REACHED]
+            self.player[Keys.UUID],
+            self.player[Keys.STATS][Keys.FULFILLED],
+            self.player[Keys.STATS][Keys.UNFILLED],
+            self.player[Keys.STATS][Keys.LIMIT_REACHED]
         ))
 
     def log_debug(self, msg):
-        self.log.debug("[{}]: {}".format(self.player[Configuration.NAME], msg))
+        self.log.debug("[{}]: {}".format(self.player[Keys.NAME], msg))
 
     def log_info(self, msg):
-        self.log.info("[{}]: {}".format(self.player[Configuration.NAME], msg))
+        self.log.info("[{}]: {}".format(self.player[Keys.NAME], msg))
 
     def log_warning(self, msg):
-        self.log.warning("[{}]: {}".format(self.player[Configuration.NAME], msg))
+        self.log.warning("[{}]: {}".format(self.player[Keys.NAME], msg))
 
     def log_error(self, msg):
-        self.log.error("[{}]: {}".format(self.player[Configuration.NAME], msg))
+        self.log.error("[{}]: {}".format(self.player[Keys.NAME], msg))
 
     def log_critical(self, msg):
-        self.log.critical("[{}]: {}".format(self.player[Configuration.NAME], msg))
+        self.log.critical("[{}]: {}".format(self.player[Keys.NAME], msg))
 
     @property
     def url(self):
@@ -60,28 +60,28 @@ class AdWatcher():
         :return: Ad url
         :rtype: str
         """
-        return "http://ad.desiredcraft.net/?server_id=44&player_uuid={}".format(self.player[Configuration.UUID])
+        return "http://ad.desiredcraft.net/?server_id=44&player_uuid={}".format(self.player[Keys.UUID])
 
     def setup(self):
         r"""Sets up the browser."""
         options = webdriver.ChromeOptions()
         # options = webdriver.FirefoxOptions()
         # profile = webdriver.FirefoxProfile()
-        if self.config[Configuration.HEADLESS]:
+        if self.config[Keys.HEADLESS]:
             self.log_info("Using browser in headless mode.")
             options.add_argument("--headless")
         else:
             options.add_argument("--auto-open-devtools-for-tabs")
-        if self.config[Configuration.INCOGNITO]:
+        if self.config[Keys.INCOGNITO]:
             self.log_info("Using browser in incognito mode.")
             options.add_argument("--incognito")
             # profile.set_preference("browser.privatebrowsing.autostart", True)
             # profile.update_preferences()
         self.proxy = self.config.get_proxy()
         if self.proxy is not None:
-            proxyurl = "{}:{}".format(self.proxy[Configuration.URL], self.proxy[Configuration.PORT])
-            if not self.proxy[Configuration.USER] == "":
-                proxyurl = "{}:{}@{}".format(self.proxy[Configuration.USER], self.proxy[Configuration.PASSWORD], proxyurl)
+            proxyurl = "{}:{}".format(self.proxy[Keys.URL], self.proxy[Keys.PORT])
+            # if not self.proxy[Keys.USER] == "":
+            #     proxyurl = "{}:{}@{}".format(self.proxy[Keys.USER], self.proxy[Keys.PASSWORD], proxyurl)
             proxyurl = "http://{}".format(proxyurl)
             # proxy = Proxy({
             #     'proxyType': ProxyType.MANUAL,
@@ -153,7 +153,7 @@ class AdWatcher():
         if self.proxy is None:
             self.log.info("No more proxies to test. Relying on direct connection.")
             return True
-        if self.proxy[Configuration.ABANDONED]:
+        if self.proxy[Keys.ABANDONED]:
             self.log.info("Proxy has been marked as abandoned. Reloading browser with new proxy settings.")
             self.quit()
             self.setup()
@@ -161,7 +161,7 @@ class AdWatcher():
         try:
             self.browser.get("https://ipinfo.io/json")
         except TimeoutException:
-            self.proxy[Configuration.ABANDONED] = True
+            self.proxy[Keys.ABANDONED] = True
             self.log.info("Timeout exceeded. Abandoning proxy.")
             return False
         # self.browser.get("https://www.google.ch/")
@@ -180,7 +180,7 @@ class AdWatcher():
                 expected_conditions.presence_of_element_located((By.CLASS_NAME, 'error-code')))
             elem = self.browser.find_element_by_class_name('error-code')
             self.log.warning("Error: {}".format(elem.text))
-            self.proxy[Configuration.ABANDONED] = True
+            self.proxy[Keys.ABANDONED] = True
             self.log.info("Abandoning proxy.")
             return False
         except TimeoutException:
@@ -209,8 +209,8 @@ class AdWatcher():
 
         :rtype: bool
         """
-        last_limit = parser.parse(self.player[Configuration.LAST_LIMIT])
-        limit_delay = timedelta(minutes=self.config[Configuration.LIMIT_DELAY])
+        last_limit = parser.parse(self.player[Keys.LAST_LIMIT])
+        limit_delay = timedelta(minutes=self.config[Keys.LIMIT_DELAY])
         expire = last_limit + limit_delay
         if expire < datetime.now():
             return True
@@ -244,7 +244,7 @@ class AdWatcher():
         :return: Result class for use in the stats dict
         :rtype: str
         """
-        if self.proxy is not None and self.proxy[Configuration.ABANDONED]:
+        if self.proxy is not None and self.proxy[Keys.ABANDONED]:
             self.log_info("Proxy has been marked as abandoned. Reloading browser with new proxy settings.")
             self.setup()
             while not self.does_proxy_work():
@@ -257,13 +257,13 @@ class AdWatcher():
             )
         except TimeoutException:
             self.log_warning("Didn't recieve expected response.")
-            return Configuration.UNFILLED
+            return Keys.UNFILLED
         except UnexpectedAlertPresentException:
             alert = self.browser.switch_to.alert
             self.log_warning("ALERT: {}".format(alert.text))
             alert.accept()
             self.log_warning("Limit not yet expired!")
-            return Configuration.LIMIT_REACHED
+            return Keys.LIMIT_REACHED
         WebDriverWait(self.browser, 120).until(
             self.wait_for_opacity()
             # expected_conditions.presence_of_element_located((By.TAG_NAME, 'style'))
@@ -274,11 +274,11 @@ class AdWatcher():
         maxed = self.browser.find_element_by_id('max-view-message')
         adblock = self.browser.find_element_by_id('adblock-message-container')
         if len(fulfill.get_property('style')) == 1:
-            return Configuration.FULFILLED
+            return Keys.FULFILLED
         if len(unfill.get_property('style')) == 1:
-            return Configuration.UNFILLED
+            return Keys.UNFILLED
         if len(maxed.get_property('style')) == 1:
-            return Configuration.LIMIT_REACHED
+            return Keys.LIMIT_REACHED
         if len(adblock.get_property('style')) == 1:
             return ""
         self.log_critical("Couldn't determine the outcome!")
@@ -288,21 +288,21 @@ class AdWatcher():
         r"""Tries to watch ads until the limit has been reached."""
         unfilled_count = 0
         temp_stats = {
-            Configuration.FULFILLED: 0,
-            Configuration.UNFILLED: 0,
-            Configuration.LIMIT_REACHED: 0
+            Keys.FULFILLED: 0,
+            Keys.UNFILLED: 0,
+            Keys.LIMIT_REACHED: 0
         }
         while True:
             try:
                 result = self.watch()
                 if not result == "":
-                    self.player[Configuration.STATS][result] += 1
+                    self.player[Keys.STATS][result] += 1
                     if self.proxy is not None:
-                        self.proxy[Configuration.STATS][result] += 1
+                        self.proxy[Keys.STATS][result] += 1
                     temp_stats[result] += 1
                 else:
                     if self.proxy is not None:
-                        self.proxy[Configuration.ABANDONED] = True
+                        self.proxy[Keys.ABANDONED] = True
                         self.log_info("Website thinks I'm using adblock. Baka. Switching proxy.")
                     else:
                         self.log_critical("Website thinks I'm using adblock.")
@@ -313,19 +313,19 @@ class AdWatcher():
             if self.config.interrupt_save:
                 self.quit()
                 return
-            if result == Configuration.UNFILLED and self.proxy is not None:
+            if result == Keys.UNFILLED and self.proxy is not None:
                 unfilled_count += 1
-                if unfilled_count >= self.config[Configuration.ABANDON_AFTER]:
-                    self.proxy[Configuration.ABANDONED] = True
+                if unfilled_count >= self.config[Keys.ABANDON_AFTER]:
+                    self.proxy[Keys.ABANDONED] = True
                     unfilled_count = 0
                     self.log_info("No ads received since {} tries. Abandoning proxy.".format(
-                        self.config[Configuration.ABANDON_AFTER]
+                        self.config[Keys.ABANDON_AFTER]
                     ))
             else:
                 unfilled_count = 0
-            if result == Configuration.LIMIT_REACHED:
+            if result == Keys.LIMIT_REACHED:
                 break
-            interval = timedelta(seconds=self.config[Configuration.WATCH_DELAY])
+            interval = timedelta(seconds=self.config[Keys.WATCH_DELAY])
             next_watch = datetime.now() + interval
             self.log_info("{} - Waiting until {}(in {}).".format(
                 result.upper(),
@@ -340,13 +340,13 @@ class AdWatcher():
             if self.config.interrupt_save:
                 self.quit()
                 return
-        self.player[Configuration.LAST_LIMIT] = datetime.now().isoformat()
+        self.player[Keys.LAST_LIMIT] = datetime.now().isoformat()
         self.config.save()
         self.log_info("Reached maximum ad view count."
                       "Statistics: Fulfilled({}), Unfilled({}), Limit reached({})".format(
-            temp_stats[Configuration.FULFILLED],
-            temp_stats[Configuration.UNFILLED],
-            temp_stats[Configuration.LIMIT_REACHED]
+            temp_stats[Keys.FULFILLED],
+            temp_stats[Keys.UNFILLED],
+            temp_stats[Keys.LIMIT_REACHED]
         ))
         self.quit()
 
