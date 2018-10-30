@@ -126,84 +126,25 @@ class AdWatcher():
             self.log_warning("Limit({}) has not yet been reached. {} left.".format(expire, expire - now))
             return False
 
-    class wait_for_opacity(object):
-        def __call__(self, driver):
-            try:
-                fulfill = expected_conditions._find_element(driver, (By.ID, 'post-message'))
-                unfill = expected_conditions._find_element(driver, (By.ID, 'no-fill-message'))
-                maxed = expected_conditions._find_element(driver, (By.ID, 'max-view-message'))
-                adblock = expected_conditions._find_element(driver, (By.ID, 'adblock-message-container'))
-                if fulfill.value_of_css_property("opacity") == "1":
-                    return True
-                if unfill.value_of_css_property("opacity") == "1":
-                    return True
-                if maxed.value_of_css_property("opacity") == "1":
-                    return True
-                if adblock.value_of_css_property("opacity") == "1":
-                    return True
-                return False
-            except StaleElementReferenceException:
-                return False
-
     def watch(self):
         """Tries to watch one ad.
 
         :return: Result class for use in the stats dict
         :rtype: str
         """
-        if self.proxy is not None and self.proxy[Keys.ABANDONED]:
-            self.log_info("Proxy {} has been marked as abandoned. Changing to new proxy settings.".format(
-                self.proxy[Keys.ADDRESS]
-            ))
-            while not self.does_proxy_work():
-                if not self.change_proxy_successful():
-                    break
-
-        # Load site
-        if self.browser.current_url == self.url:
-            self.browser.refresh()
-        else:
-            self.browser.get(self.url)
-        try:
-            WebDriverWait(self.browser, 10).until(
-                expected_conditions.presence_of_element_located((By.ID, 'player-wrapper'))
-            )
-        except TimeoutException:
-            self.log_warning("Didn't recieve expected response.")
-            return Keys.UNFILLED
-        except UnexpectedAlertPresentException:
-            alert = self.browser.switch_to.alert
-            self.log_warning("ALERT: {}".format(alert.text))
-            alert.accept()
-            self.log_warning("Limit not yet expired!")
-            return Keys.LIMIT_REACHED
-
-        # Wait until ad has been watched
-        try:
-            WebDriverWait(self.browser, 120).until(
-                self.wait_for_opacity()
-                # expected_conditions.presence_of_element_located((By.TAG_NAME, 'style'))
-                # expected_conditions.presence_of_element_located((By.ID, 'max-view-message'))
-            )
-        except TimeoutException:
-            self.log_error("Timeout while awaiting end of ad.")
+        if self.proxy is not None:
+            self._check_proxy_still_valid()
+        if not self._load_ad_website():
             exit(1)
-
-        # Determine outcome
-        fulfill = self.browser.find_element_by_id('post-message')
-        unfill = self.browser.find_element_by_id('no-fill-message')
-        maxed = self.browser.find_element_by_id('max-view-message')
-        adblock = self.browser.find_element_by_id('adblock-message-container')
-        if fulfill.value_of_css_property('opacity') == "1":
-            return Keys.FULFILLED
-        if unfill.value_of_css_property('opacity') == "1":
-            return Keys.UNFILLED
-        if maxed.value_of_css_property('opacity') == "1":
-            return Keys.LIMIT_REACHED
-        if adblock.value_of_css_property('opacity') == "1":
-            return ""
-        self.log_error("Couldn't determine the outcome!")
-        exit(1)
+        premature_result = self._catch_premature_flags()
+        if not premature_result == '':
+            return premature_result
+        if not self._await_end_of_ad():
+            exit(1)
+        result = self._classify_outcome()
+        if result is None:
+            exit(1)
+        return result
 
     def watch_all(self):
         """Tries to watch ads until the limit has been reached."""
@@ -214,6 +155,7 @@ class AdWatcher():
             Keys.LIMIT_REACHED: 0
         }
         while True:
+            result = ''
             try:
                 result = self.watch()
                 if not result == "":
@@ -228,6 +170,9 @@ class AdWatcher():
                     else:
                         self.log_critical("Website thinks I'm using adblock.")
                         return
+            except:
+                self.log_error("Exception occurred. Idk what or why though. Please fix me.")
+                exit(1)
             finally:
                 self.log_debug("Saving config after watching.")
                 self.config.save()
@@ -263,12 +208,8 @@ class AdWatcher():
                 return
         self.player[Keys.LAST_LIMIT] = datetime.now().isoformat()
         self.config.save()
-        self.log_info("Reached maximum ad view count."
-                      "Statistics: Fulfilled({}), Unfilled({}), Limit reached({})".format(
-            temp_stats[Keys.FULFILLED],
-            temp_stats[Keys.UNFILLED],
-            temp_stats[Keys.LIMIT_REACHED]
-        ))
+        self.log_info("Reached maximum ad view count.")
+        self.print_statistic()
         self.quit()
 
     def quit(self):

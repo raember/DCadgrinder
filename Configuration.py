@@ -149,3 +149,4 @@ class Keys():
     BROWSER = "browser"
     DEVTOOLS = "devtools"
     TIMEOUT = "timeout"
+    AD_TIMEOUT = "ad_timeout"
