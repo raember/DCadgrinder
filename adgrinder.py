@@ -81,7 +81,11 @@ class Main:
         if self.args.test:
             self.log.info('Running proxy test.')
             conf.load().complete_data(gameapi)
-            watcher = AdWatcher(conf[Keys.PLAYERS][0], conf)
+            fake_player = {
+                Keys.NAME: 'PROXY TEST',
+                Keys.UUID: ''
+            }
+            watcher = AdWatcher(fake_player, conf)
             watcher.setup()
             while not watcher.does_proxy_work():
                 watcher.quit()

@@ -74,9 +74,9 @@ class Configuration:
             if name_or_uuid == '':
                 name_or_uuid = input("Please enter player name or UUID: ")
             if GameApi.is_uuid(name_or_uuid):
-                self.json[Keys.PLAYERS] = {"uuid": name_or_uuid}
+                self.json[Keys.PLAYERS] = [{"uuid": name_or_uuid}]
             else:
-                self.json[Keys.PLAYERS] = {"name": name_or_uuid}
+                self.json[Keys.PLAYERS] = [{"name": name_or_uuid}]
         for player in self.json[Keys.PLAYERS]:
             if Keys.NAME in player and Keys.UUID not in player:
                 uuid = gameapi.get_uuid(player[Keys.NAME])
@@ -106,6 +106,10 @@ class Configuration:
         self._default(Keys.HEADLESS, True, self.json)
         self._default(Keys.INCOGNITO, False, self.json)
         self._default(Keys.START_DELAY, 5, self.json)
+        self._default(Keys.BROWSER, 'firefox', self.json)
+        self.json[Keys.BROWSER] = self.json[Keys.BROWSER].lower()
+        self._default(Keys.DEVTOOLS, False, self.json)
+        self._default(Keys.TIMEOUT, 5, self.json)
         return self
 
     def save(self):
@@ -121,7 +125,7 @@ class Configuration:
             json.dump(self.json, fp, indent=2)
 
 
-class Keys(Enum):
+class Keys():
     PLAYERS = "players"
     NAME = "name"
     UUID = "uuid"
@@ -142,3 +146,6 @@ class Keys(Enum):
     HEADLESS = "headless"
     START_DELAY = "start_delay"
     INCOGNITO = "incognito"
+    BROWSER = "browser"
+    DEVTOOLS = "devtools"
+    TIMEOUT = "timeout"
