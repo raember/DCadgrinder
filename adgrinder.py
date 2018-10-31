@@ -84,10 +84,9 @@ class Main:
         watcherthreads = []
         for player in self.conf[Keys.PLAYERS]:
             watcher = AdWatcher(player, self.conf)
-            expired = watcher.is_limit_expired()
             if self.args.infinity:
                 thread = Thread(target=watcher.ad_grind_forever, args=([self.event]))
-            elif expired:
+            elif watcher.is_limit_expired():
                 thread = Thread(target=watcher.watch_all, args=([self.event]))
             else:
                 continue
