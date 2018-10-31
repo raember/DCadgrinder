@@ -7,7 +7,7 @@ from GameApi import GameApi
 
 
 class Configuration:
-    r"""Configuration class. Handles the management of all the configurations."""
+    """Configuration class. Handles the management of all the configurations."""
     filename = "adgrinder.json"
     log = None
     json = {}
@@ -20,7 +20,7 @@ class Configuration:
         return self.json[item]
 
     def get_proxy(self):
-        r"""Select the first proxy that isn't flagged as abandoned.
+        """Select the first proxy that isn't flagged as abandoned.
 
         :return: Non abandoned proxy. None if there is no non abandoned proxy.
         :rtype: dict
@@ -31,7 +31,7 @@ class Configuration:
         return None
 
     def load(self):
-        r"""Loads data from file.
+        """Loads data from file.
         :return: self
         :rtype: Configuration
         """
@@ -43,10 +43,10 @@ class Configuration:
         return self
 
     def _default(self, key, value, node):
-        r"""Checks if key exists in dict and sets it to a default value if not.
+        """Checks if key exists in dict and sets it to a default value if not.
 
         :param key: The key to check for
-        :type key: Keys
+        :type key: str
         :param value: The default value
         :type value: object
         :param node: The node to observe
@@ -59,13 +59,15 @@ class Configuration:
             return True
         return False
 
-    def complete_data(self, gameapi, name_or_uuid=''):
-        r"""Completes datastructure.
+    def complete_data(self, gameapi, name_or_uuid='', reload_usernames=False):
+        """Completes datastructure.
 
         :param gameapi: GameApi to use when querying missing data(uuid/username).
         :type gameapi: GameApi
         :param name_or_uuid: Name or UUID to use if there is no player entry yet. Default: Asks user.
         :type name_or_uuid: str
+        :param reload_usernames: Whether the usernames should get updated
+        :type reload_usernames: bool
         :return: self
         :rtype: Configuration
         """
@@ -78,14 +80,14 @@ class Configuration:
             else:
                 self.json[Keys.PLAYERS] = [{"name": name_or_uuid}]
         for player in self.json[Keys.PLAYERS]:
-            if Keys.NAME in player and Keys.UUID not in player:
+            if not reload_usernames and Keys.NAME in player and Keys.UUID not in player:
                 uuid = gameapi.get_uuid(player[Keys.NAME])
                 if uuid == "":
                     self.log.critical("Couldn't get UUID of user.")
                     self.interrupt_save = True
                     exit(1)
                 player[Keys.UUID] = uuid
-            elif Keys.NAME not in player and Keys.UUID in player:
+            elif reload_usernames or Keys.NAME not in player and Keys.UUID in player:
                 name = gameapi.get_name(player[Keys.UUID])
                 if name == "":
                     self.log.warning("Assuming no name change.")
@@ -109,11 +111,14 @@ class Configuration:
         self._default(Keys.BROWSER, 'firefox', self.json)
         self.json[Keys.BROWSER] = self.json[Keys.BROWSER].lower()
         self._default(Keys.DEVTOOLS, False, self.json)
-        self._default(Keys.TIMEOUT, 5, self.json)
+        self._default(Keys.PAGE_LOAD_TIMEOUT, 15, self.json)
+        self._default(Keys.SCRIPT_TIMEOUT, 10, self.json)
+        self._default(Keys.CONNECTION_TEST_TIMEOUT, 5, self.json)
+        self._default(Keys.AD_TIMEOUT, 120, self.json)
         return self
 
     def save(self):
-        r"""Saves data to file.
+        """Saves data to file.
 
         :return: self
         :rtype: Configuration
@@ -137,16 +142,18 @@ class Keys():
     PROXIES = "proxies"
     ADDRESS = "url"
     PORT = "port"
-    USER = "user"
+    USER = "use"
     PASSWORD = "password"
     ABANDONED = "abandoned"
-    ABANDON_AFTER = "abandon_proxy_after"
+    ABANDON_AFTER = "abandon_proxy_afte"
     WATCH_DELAY = "ad_watch_delay"
     LIMIT_DELAY = "limit_delay"
     HEADLESS = "headless"
     START_DELAY = "start_delay"
     INCOGNITO = "incognito"
-    BROWSER = "browser"
+    BROWSER = "browse"
     DEVTOOLS = "devtools"
-    TIMEOUT = "timeout"
+    PAGE_LOAD_TIMEOUT = "page_load_timeout"
+    SCRIPT_TIMEOUT = "script_timeout"
+    CONNECTION_TEST_TIMEOUT = "connection_test_timeout"
     AD_TIMEOUT = "ad_timeout"

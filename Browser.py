@@ -193,7 +193,7 @@ class FirefoxBrowserFactory(BrowserFactory):
             proxy_url='',
             proxy_port=80
     ):
-        r"""Creates a Firefox browser.
+        """Creates a Firefox browser.
 
         :param headless: If the browser should start in headless mode
         :type headless: bool

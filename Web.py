@@ -1,9 +1,10 @@
 import logging
 import requests
+from requests import Response
 import json
 
 class WebClient:
-    r"""Web client to make HTTP requests to the internet"""
+    """Web client to make HTTP requests to the internet"""
     log = None
     http = None
     headers = None
@@ -18,7 +19,7 @@ class WebClient:
             user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
                        'Chrome/68.0.3440.106 Safari/537.36 '
     ):
-        r"""Creates a new web client.
+        """Creates a new web client.
 
         :param proxy: Proxy configuration by protocol
         :type proxy: dict
@@ -40,7 +41,7 @@ class WebClient:
             'Upgrade-Insecure-Requests': '1'
         }
         if proxy is not None and not proxy == '':
-            self.log.info("Using proxy server {}".format(proxy))
+            self.log.debug("Using proxy server {}".format(proxy))
             if not user == '':
                 proxy = "{}:{}@{}".format(user, password, proxy)
             self.proxy = {
@@ -50,7 +51,7 @@ class WebClient:
         self.log.debug("Set up web client.")
 
     def get(self, url, headers=None):
-        r"""Sends a GET request to a url.
+        """Sends a GET request to a url.
 
         :param url: Target address to send the request to
         :type url: str
@@ -71,7 +72,7 @@ class WebClient:
         return response
 
     def post(self, url, data, headers=None):
-        r"""Sends a POST request to a url.
+        """Sends a POST request to a url.
 
         :param url: Target address to send the request to
         :type url: str
@@ -95,7 +96,7 @@ class WebClient:
         return response
 
     def patch(self, url, data, headers=None):
-        r"""Sends a PATCH request to a url.
+        """Sends a PATCH request to a url.
 
         :param url: Target address to send the request to
         :type url: str
