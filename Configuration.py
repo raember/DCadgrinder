@@ -151,7 +151,7 @@ class Keys():
     HEADLESS = "headless"
     START_DELAY = "start_delay"
     INCOGNITO = "incognito"
-    BROWSER = "browse"
+    BROWSER = "browser"
     DEVTOOLS = "devtools"
     PAGE_LOAD_TIMEOUT = "page_load_timeout"
     SCRIPT_TIMEOUT = "script_timeout"
