@@ -142,11 +142,8 @@ class AdWatcher():
         :return: Whether the expiration date is already over
         :rtype: bool
         """
-        last_limit = dateparser.parse(self.player[Keys.LAST_LIMIT])
-        limit_delay = timedelta(minutes=self.config[Keys.LIMIT_DELAY])
-        expiration_date = last_limit + limit_delay
-        now = datetime.now()
-        time_left = expiration_date - now
+        time_left = self.get_time_span_until_limit_expires()
+        expiration_date = datetime.now() + time_left
         if time_left < timedelta(0):
             return True
         else:
@@ -402,7 +399,7 @@ class AdWatcher():
         """
         while True:
             if not self.is_limit_expired():
-                time_left = self.get_time_span_until_limit_expires() + 1
+                time_left = self.get_time_span_until_limit_expires()
                 self.log_info("Waiting until ad limit expires(in {})".format(time_left))
                 event.wait(time_left.total_seconds())
                 if event.is_set():
