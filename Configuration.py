@@ -1,8 +1,8 @@
+import json
 import logging
 import os
-import json
-from enum import Enum
 from datetime import datetime
+
 from GameApi import GameApi
 
 
@@ -145,7 +145,7 @@ class Keys():
     USER = "use"
     PASSWORD = "password"
     ABANDONED = "abandoned"
-    ABANDON_AFTER = "abandon_proxy_afte"
+    ABANDON_AFTER = "abandon_proxy_after"
     WATCH_DELAY = "ad_watch_delay"
     LIMIT_DELAY = "limit_delay"
     HEADLESS = "headless"
