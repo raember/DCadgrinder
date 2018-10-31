@@ -223,11 +223,15 @@ class AdWatcher():
             return WatchResults.ELEMENT_NOT_FOUND
         except UnexpectedAlertPresentException:
             alert = self.browser.switch_to.alert
-            self.log_warning("ALERT: {}".format(alert.text))
+            limit_reached_msg = "You have reached the maximum number of ad views per day. Further views are not " \
+                                "permitted to prevent fraudulent activity. Please try again tomorrow."
+            if alert.text == limit_reached_msg:
+                alert.accept()
+                self.log_warning("Limit not yet expired!")
+                return WatchResults.LIMIT_REACHED
+            self.log_warning("UNKNOWN ALERT: {}".format(alert.text))
             alert.accept()
-            # TODO: Classify alert message and notify if not expected "Limit reached" alert.
-            self.log_warning("Limit not yet expired!")
-            return WatchResults.LIMIT_REACHED
+            return WatchResults.UNDETERMINABLE
         except:
             return WatchResults.INTERRUPTED
         return None
@@ -337,6 +341,12 @@ class AdWatcher():
             if self.proxy is not None:
                 self.proxy[Keys.STATS][Keys.UNFILLED] += 1
 
+    def _clear_temp_statistics(self):
+        self.temp_stats = {
+            Keys.FULFILLED: 0,
+            Keys.UNFILLED: 0
+        }
+
     def _can_continue(self, result):
         """Decides whether continued ad watching is feasible or not.
 
@@ -392,12 +402,15 @@ class AdWatcher():
         """
         while True:
             if not self.is_limit_expired():
-                event.wait(self.get_time_span_until_limit_expires().total_seconds() + 1)
+                time_left = self.get_time_span_until_limit_expires() + 1
+                self.log_info("Waiting until ad limit expires(in {})".format(time_left))
+                event.wait(time_left.total_seconds())
                 if event.is_set():
-                    self.log_info("Shutting down...")
+                    self.log_info("Ending infinity loop.")
                     self.print_statistics()
                     self.quit()
                     break
+            self._clear_temp_statistics()
             self.watch_all(event)
             if event.is_set():
                 break
