@@ -1,17 +1,16 @@
 import logging
-import os
-import json
-import time
-import dateparser
+from datetime import datetime, timedelta
 from enum import Enum
-from selenium import webdriver
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions
+from threading import Event
+
+import dateparser
 from selenium.common.exceptions import TimeoutException, StaleElementReferenceException, UnexpectedAlertPresentException
 from selenium.webdriver.common.by import By
-from datetime import datetime, timedelta
-from Configuration import Configuration, Keys
+from selenium.webdriver.support import expected_conditions
+from selenium.webdriver.support.ui import WebDriverWait
+
 from Browser import ChromeBrowserFactory, FirefoxBrowserFactory
+from Configuration import Configuration, Keys
 
 
 class AdWatcher():
@@ -127,21 +126,31 @@ class AdWatcher():
         self.log.info("Connection established.")
         return True
 
-    def get_time_until_limit_expires(self):
-        """Checks whether the expiration limit has already passed
+    def get_time_span_until_limit_expires(self):
+        """Calculate the time span left until the limit expires.
 
         :return: The time span until the limit expires. Negative if
         :rtype: timedelta
         """
         last_limit = dateparser.parse(self.player[Keys.LAST_LIMIT])
         limit_delay = timedelta(minutes=self.config[Keys.LIMIT_DELAY])
-        return last_limit + limit_delay
-        expire = last_limit + limit_delay
+        return datetime.now() - (last_limit + limit_delay)
+
+    def is_limit_expired(self):
+        """Checks whether the expiration limit has already passed.
+
+        :return: Whether the expiration date is already over
+        :rtype: bool
+        """
+        last_limit = dateparser.parse(self.player[Keys.LAST_LIMIT])
+        limit_delay = timedelta(minutes=self.config[Keys.LIMIT_DELAY])
+        expiration_date = last_limit + limit_delay
         now = datetime.now()
-        if expire < now:
+        time_left = expiration_date - now
+        if time_left < timedelta(0):
             return True
         else:
-            self.log_warning("Limit({}) has not yet been reached. {} left.".format(expire, expire - now))
+            self.log_warning("Limit({}) has not yet been reached. {} left.".format(expiration_date, time_left))
             return False
 
     def watch(self):
@@ -186,8 +195,8 @@ class AdWatcher():
         :return: Successful or not
         :rtype: bool
         """
-        self.browser.set_page_load_timeout(self.config[Keys.PAGE_LOAD_TIMEOUT])
         try:
+            self.browser.set_page_load_timeout(self.config[Keys.PAGE_LOAD_TIMEOUT])
             if self.browser.current_url == self.url:
                 self.browser.refresh()
             else:
@@ -196,6 +205,8 @@ class AdWatcher():
         except TimeoutException:
             self.log.info("Timeout exceeded.")
             return WatchResults.TIMEOUT
+        except:
+            return WatchResults.INTERRUPTED
 
     def _catch_premature_flags(self):
         """Catch premature flags which indicate failure to watch ads.
@@ -217,6 +228,8 @@ class AdWatcher():
             # TODO: Classify alert message and notify if not expected "Limit reached" alert.
             self.log_warning("Limit not yet expired!")
             return WatchResults.LIMIT_REACHED
+        except:
+            return WatchResults.INTERRUPTED
         return None
 
     def _await_end_of_ad(self):
@@ -252,6 +265,8 @@ class AdWatcher():
         except TimeoutException:
             self.log_error("Timeout while awaiting end of ad.")
             return WatchResults.TIMEOUT
+        except:
+            return WatchResults.INTERRUPTED
 
     def _classify_outcome(self):
         """Classify the outcome of the ad watching.
@@ -270,13 +285,16 @@ class AdWatcher():
         if maxed.value_of_css_property('opacity') == "1":
             return WatchResults.LIMIT_REACHED
         if adblock.value_of_css_property('opacity') == "1":
-            self.log_error("Website thinks I'm using adblock.")
             return WatchResults.ADBLOCK
         self.log_error("Couldn't determine the outcome!")
         return WatchResults.UNDETERMINABLE
 
-    def watch_all(self):
-        """Tries to watch ads until the limit has been reached."""
+    def watch_all(self, event):
+        """Tries to watch ads until the limit has been reached.
+
+        :param event: Thread event object to control thread
+        :type event: Event
+        """
         self.continued_unfilleds = 0
         self.got_first_fullfilled = False
         while True:
@@ -294,11 +312,12 @@ class AdWatcher():
                 next_watch,
                 self.interval
             ))
-            try:
-                time.sleep((next_watch - now).total_seconds())
-            except KeyboardInterrupt:
-                self.log_warning("Received KeyboardInterrupt.")
-        self.player[Keys.LAST_LIMIT] = datetime.now().isoformat()
+            event.wait((next_watch - now).total_seconds())
+            if event.is_set():
+                self.log_info("Shutting down...")
+                self.print_statistics()
+                self.quit()
+                return
         self.config.save()
         self.log_info("Stopped ad watching.")
         self.print_statistics()
@@ -327,15 +346,16 @@ class AdWatcher():
         :rtype: bool
         """
         if result == WatchResults.LIMIT_REACHED:
+            self.player[Keys.LAST_LIMIT] = datetime.now().isoformat()
             self.log_info("Reached the daily limit.")
             return False
         elif result == WatchResults.ADBLOCK:
             self.log_error("Website thinks I'm using adblock.")
-            if self.proxy is not None:
-                self.proxy[Keys.ABANDONED] = True
-                self.config.save()
-                self.log_error("Switching proxy.")
-            return False
+            # if self.proxy is not None:
+            #     self.proxy[Keys.ABANDONED] = True
+            #     self.config.save()
+            #     self.log_error("Switching proxy.")
+            return True
         elif result == WatchResults.UNDETERMINABLE:
             self.log_error("Couldn't determine the outcome.")
             return False
@@ -344,6 +364,9 @@ class AdWatcher():
             return False
         elif result == WatchResults.ELEMENT_NOT_FOUND:
             self.log_error("A HTML element couldn't be found.")
+            return False
+        elif result == WatchResults.INTERRUPTED:
+            self.log_error("Recieved an interrupt signal.")
             return False
         return True
 
@@ -361,13 +384,28 @@ class AdWatcher():
                 ))
                 self.got_first_fullfilled = False
 
-    def ad_grind_forever(self):
-        """Keep watching ads forever."""
+    def ad_grind_forever(self, event):
+        """Keep watching ads forever.
 
+        :param event: Thread event object to control thread
+        :type event: Event
+        """
+        while True:
+            if not self.is_limit_expired():
+                event.wait(self.get_time_span_until_limit_expires().total_seconds() + 1)
+                if event.is_set():
+                    self.log_info("Shutting down...")
+                    self.print_statistics()
+                    self.quit()
+                    break
+            self.watch_all(event)
+            if event.is_set():
+                break
 
     def quit(self):
         """Quits the currently used browser."""
         self.browser.quit()
+
 
 class WatchResults(Enum):
     FULFILLED = Keys.FULFILLED
@@ -377,3 +415,4 @@ class WatchResults(Enum):
     ELEMENT_NOT_FOUND = "Element not found"
     UNDETERMINABLE = "Undeterminable result"
     ADBLOCK = "Adblock"
+    INTERRUPTED = "Interrupted"

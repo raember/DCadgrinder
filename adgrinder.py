@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 
-import logging
 import argparse
+import logging
 import os
-import threading
-import time
-from Web import WebClient
-from Configuration import Configuration, Keys
+import signal
+from threading import Thread, Event
+
 from Ad import AdWatcher
+from Configuration import Configuration, Keys
 from GameApi import GameApi
+from Web import WebClient
 
 logging.basicConfig(
     format='%(asctime)s %(levelname)-8s %(name)16s: %(message)s',
@@ -22,6 +23,7 @@ class Main:
     log = None
     args = None
     conf = Configuration()
+    event = Event()
 
     def __init__(self):
         self.log = logging.getLogger(self.__class__.__name__)
@@ -40,9 +42,14 @@ class Main:
                             help="Abandon current proxy server and exit.")
         parser.add_argument('-s', '--statistics', action='store_true',
                             help="Print statistics and exit.")
+        parser.add_argument('-i', '--infinity', action='store_true',
+                            help="Watch ads indefinitely.")
         self.args = parser.parse_args()
 
     def run(self):
+        for sig in ('TERM', 'HUP', 'INT'):
+            signal.signal(getattr(signal, 'SIG' + sig), lambda signo, _frame: self.capture_signal(signo, _frame))
+
         if self.args.abandon_proxy:
             if not self.abandon_proxy():
                 exit(1)
@@ -67,6 +74,8 @@ class Main:
         if self.args.statistics:
             self.print_statistics()
             exit(0)
+        if self.args.infinity:
+            self.log.info("Running ad watcher indefinitely.")
 
         # Let's go!
         self.conf.load().complete_data(self.create_gameapi()).save()
@@ -75,19 +84,30 @@ class Main:
         watcherthreads = []
         for player in self.conf[Keys.PLAYERS]:
             watcher = AdWatcher(player, self.conf)
-            if watcher.get_time_until_limit_expires():
+            expired = watcher.is_limit_expired()
+            if self.args.infinity:
+                thread = Thread(target=watcher.ad_grind_forever, args=([self.event]))
+            elif expired:
+                thread = Thread(target=watcher.watch_all, args=([self.event]))
+            else:
+                continue
+            try:
                 watcher.setup()
-                thread = threading.Thread(target=watcher.watch_all)
                 thread.start()
                 watcherthreads.append(thread)
                 self.log.info("Started ad watcher thread. Waiting {}s.".format(self.conf[Keys.START_DELAY]))
-                time.sleep(self.conf[Keys.START_DELAY])
-        try:
-            for thread in watcherthreads:
-                thread.join()
-        except KeyboardInterrupt:
-            self.conf.save()
+                self.event.wait(self.conf[Keys.START_DELAY])
+            except KeyboardInterrupt:
+                self.event.set()
+            if self.event.is_set():
+                break
+        for thread in watcherthreads:
+            thread.join()
         self.log.info("Finished.")
+
+    def capture_signal(self, signo, _frame):
+        self.log.critical("Interrupted by {}. Shutting down.".format(signo))
+        self.event.set()
 
     def create_gameapi(self):
         """Creates a GameApi instance
