@@ -64,7 +64,12 @@ class AdWatcher():
         self.log.critical("[{}]: {}".format(self.player[Keys.NAME], msg))
 
     def print_statistics(self):
-        self.log_info("Statistics: Fulfilled({}), Unfilled({}), Limit reached({})".format(
+        self.log_info("Statistics(temp): Fulfilled({}), Unfilled({}), Limit reached({})".format(
+            self.temp_stats[Keys.FULFILLED],
+            self.temp_stats[Keys.UNFILLED],
+            self.temp_stats[Keys.LIMIT_REACHED]
+        ))
+        self.log_info("Statistics(overall): Fulfilled({}), Unfilled({}), Limit reached({})".format(
             self.player[Keys.STATS][Keys.FULFILLED],
             self.player[Keys.STATS][Keys.UNFILLED],
             self.player[Keys.STATS][Keys.LIMIT_REACHED]
