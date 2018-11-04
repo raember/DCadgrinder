@@ -4,7 +4,8 @@ from enum import Enum
 from threading import Event
 
 import dateparser
-from selenium.common.exceptions import TimeoutException, StaleElementReferenceException, UnexpectedAlertPresentException
+from selenium.common.exceptions import TimeoutException, StaleElementReferenceException, \
+    UnexpectedAlertPresentException, NoAlertPresentException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions
 from selenium.webdriver.support.ui import WebDriverWait
@@ -221,7 +222,11 @@ class AdWatcher():
             self.log_error("Couldn't find 'player-wrapper'.")
             return WatchResults.ELEMENT_NOT_FOUND
         except UnexpectedAlertPresentException:
-            alert = self.browser.switch_to.alert
+            try:
+                alert = self.browser.switch_to.alert
+            except NoAlertPresentException:
+                self.log_error("Error reading supposed alert. Assuming limit reached.")
+                return WatchResults.LIMIT_REACHED
             limit_reached_msg = "You have reached the maximum number of ad views per day. Further views are not " \
                                 "permitted to prevent fraudulent activity. Please try again tomorrow."
             if alert.text == limit_reached_msg:
