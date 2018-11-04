@@ -64,10 +64,9 @@ class AdWatcher():
         self.log.critical("[{}]: {}".format(self.player[Keys.NAME], msg))
 
     def print_statistics(self):
-        self.log_info("Statistics: Fulfilled({}), Unfilled({}), Limit reached({})".format(
+        self.log_info("Statistics: Fulfilled({}), Unfilled({})".format(
             self.player[Keys.STATS][Keys.FULFILLED],
-            self.player[Keys.STATS][Keys.UNFILLED],
-            self.player[Keys.STATS][Keys.LIMIT_REACHED]
+            self.player[Keys.STATS][Keys.UNFILLED]
         ))
 
     @property
@@ -150,9 +149,11 @@ class AdWatcher():
             self.log_warning("Limit({}) has not yet been reached. {} left.".format(expiration_date, time_left))
             return False
 
-    def watch(self):
+    def watch(self, event):
         """Tries to watch one ad.
 
+        :param event: Thread event object to control thread
+        :type event: Event
         :return: Outcome of the try
         :rtype: WatchResults
         """
@@ -170,6 +171,7 @@ class AdWatcher():
         if result is not None:
             return result
 
+        event.wait(1.0)
         result = self._await_end_of_ad()
         if result is not None:
             return result
@@ -259,7 +261,6 @@ class AdWatcher():
                     return False
                 except StaleElementReferenceException:
                     return False
-
         try:
             WebDriverWait(self.browser, self.config[Keys.AD_TIMEOUT]).until(wait_for_opacity())
             return None
@@ -299,7 +300,7 @@ class AdWatcher():
         self.continued_unfilleds = 0
         self.got_first_fullfilled = False
         while True:
-            result = self.watch()
+            result = self.watch(event)
             self._update_stats(result)
             self.config.save()
             if not self._can_continue(result):
