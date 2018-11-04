@@ -64,7 +64,11 @@ class AdWatcher():
         self.log.critical("[{}]: {}".format(self.player[Keys.NAME], msg))
 
     def print_statistics(self):
-        self.log_info("Statistics: Fulfilled({}), Unfilled({})".format(
+        self.log_info("Statistics(temp): Fulfilled({}), Unfilled({})".format(
+            self.temp_stats[Keys.FULFILLED],
+            self.temp_stats[Keys.UNFILLED]
+        ))
+        self.log_info("Statistics(total): Fulfilled({}), Unfilled({})".format(
             self.player[Keys.STATS][Keys.FULFILLED],
             self.player[Keys.STATS][Keys.UNFILLED]
         ))
@@ -245,6 +249,12 @@ class AdWatcher():
         class wait_for_opacity(object):
             def __call__(self, driver):
                 try:
+                    # Sometimes not everything gets loaded.
+                    # In that case, we just wait until the we see the css having loaded for the player.
+                    playerframe = expected_conditions._find_element(driver, (By.ID, 'player-frame'))
+                    if not playerframe.value_of_css_property("z-index") == "1":
+                        return False
+                    # After watching the ad, the one element that gets opacity defines the outcome.
                     fulfill = expected_conditions._find_element(driver, (By.ID, 'post-message'))
                     unfill = expected_conditions._find_element(driver, (By.ID, 'no-fill-message'))
                     maxed = expected_conditions._find_element(driver, (By.ID, 'max-view-message'))
