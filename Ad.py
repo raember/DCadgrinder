@@ -279,7 +279,7 @@ class AdWatcher():
         """
         # Sometimes not everything gets loaded.
         # In that case, we just wait until the we see the css having loaded for the player.
-        playerframe = self.browser.find_element_by_id((By.ID, 'player-frame'))
+        playerframe = self.browser.find_element_by_id('player-frame')
         if not playerframe.value_of_css_property("z-index") == "1":
             return WatchResults.NOT_LOADED
         fulfill = self.browser.find_element_by_id('post-message')
