@@ -153,11 +153,8 @@ class AdWatcher():
             self.log_warning("Limit({}) has not yet been reached. {} left.".format(expiration_date, time_left))
             return False
 
-    def watch(self, event):
+    def watch(self):
         """Tries to watch one ad.
-
-        :param event: Thread event object to control thread
-        :type event: Event
         :return: Outcome of the try
         :rtype: WatchResults
         """
@@ -175,7 +172,6 @@ class AdWatcher():
         if result is not None:
             return result
 
-        event.wait(1.0)
         result = self._await_end_of_ad()
         if result is not None:
             return result
@@ -249,11 +245,6 @@ class AdWatcher():
         class wait_for_opacity(object):
             def __call__(self, driver):
                 try:
-                    # Sometimes not everything gets loaded.
-                    # In that case, we just wait until the we see the css having loaded for the player.
-                    playerframe = expected_conditions._find_element(driver, (By.ID, 'player-frame'))
-                    if not playerframe.value_of_css_property("z-index") == "1":
-                        return False
                     # After watching the ad, the one element that gets opacity defines the outcome.
                     fulfill = expected_conditions._find_element(driver, (By.ID, 'post-message'))
                     unfill = expected_conditions._find_element(driver, (By.ID, 'no-fill-message'))
@@ -286,6 +277,11 @@ class AdWatcher():
         :return: Result
         :rtype: WatchResults
         """
+        # Sometimes not everything gets loaded.
+        # In that case, we just wait until the we see the css having loaded for the player.
+        playerframe = self.browser.find_element_by_id((By.ID, 'player-frame'))
+        if not playerframe.value_of_css_property("z-index") == "1":
+            return WatchResults.NOT_LOADED
         fulfill = self.browser.find_element_by_id('post-message')
         unfill = self.browser.find_element_by_id('no-fill-message')
         maxed = self.browser.find_element_by_id('max-view-message')
@@ -310,12 +306,12 @@ class AdWatcher():
         self.continued_unfilleds = 0
         self.got_first_fullfilled = False
         while True:
-            result = self.watch(event)
+            result = self.watch()
             self._update_stats(result)
             self.config.save()
             if not self._can_continue(result):
                 break
-            if self.proxy is not None and result == WatchResults.UNFILLED:
+            if self.proxy is not None and result in [WatchResults.UNFILLED, WatchResults.NOT_LOADED]:
                 self._check_miss_count()
             now = datetime.now()
             next_watch = now + self.interval
@@ -373,6 +369,9 @@ class AdWatcher():
             #     self.proxy[Keys.ABANDONED] = True
             #     self.config.save()
             #     self.log_error("Switching proxy.")
+            return True
+        elif result == WatchResults.NOT_LOADED:
+            self.log_error("Website didn't load properly.")
             return True
         elif result == WatchResults.UNDETERMINABLE:
             self.log_error("Couldn't determine the outcome.")
@@ -437,3 +436,4 @@ class WatchResults(Enum):
     UNDETERMINABLE = "Undeterminable result"
     ADBLOCK = "Adblock"
     INTERRUPTED = "Interrupted"
+    NOT_LOADED = "Website not properly loaded"
