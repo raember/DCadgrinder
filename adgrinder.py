@@ -16,6 +16,7 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S',
     level=logging.INFO
 )
+logging.getLogger("urllib3").setLevel(logging.ERROR)
 
 
 class Main:
