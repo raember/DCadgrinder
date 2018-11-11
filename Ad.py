@@ -7,7 +7,7 @@ import dateparser
 from selenium.common.exceptions import TimeoutException, StaleElementReferenceException, \
     UnexpectedAlertPresentException, NoAlertPresentException
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support import expected_conditions
+from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
 from Browser import ChromeBrowserFactory, FirefoxBrowserFactory
@@ -216,7 +216,7 @@ class AdWatcher():
         """
         try:
             WebDriverWait(self.browser, self.config[Keys.PAGE_LOAD_TIMEOUT]).until(
-                expected_conditions.presence_of_element_located((By.ID, 'player-wrapper'))
+                EC.presence_of_element_located((By.ID, 'player-wrapper'))
             )
         except TimeoutException:
             self.log_error("Couldn't find 'player-wrapper'.")
@@ -250,11 +250,15 @@ class AdWatcher():
         class wait_for_opacity(object):
             def __call__(self, driver):
                 try:
+                    # TODO: Find a way to detect whether the website has fully loaded or not.
+                    playerframe = EC._find_element(driver, (By.ID, 'player-frame'))
+                    if not playerframe.value_of_css_property("z-index") == "1":
+                        return False
                     # After watching the ad, the one element that gets opacity defines the outcome.
-                    fulfill = expected_conditions._find_element(driver, (By.ID, 'post-message'))
-                    unfill = expected_conditions._find_element(driver, (By.ID, 'no-fill-message'))
-                    maxed = expected_conditions._find_element(driver, (By.ID, 'max-view-message'))
-                    adblock = expected_conditions._find_element(driver, (By.ID, 'adblock-message-container'))
+                    fulfill = EC._find_element(driver, (By.ID, 'post-message'))
+                    unfill = EC._find_element(driver, (By.ID, 'no-fill-message'))
+                    maxed = EC._find_element(driver, (By.ID, 'max-view-message'))
+                    adblock = EC._find_element(driver, (By.ID, 'adblock-message-container'))
                     # The element with the opacity == 1 is the one showing on top of the player.
                     if fulfill.value_of_css_property("opacity") == "1":
                         return True
@@ -316,8 +320,9 @@ class AdWatcher():
             self.config.save()
             if not self._can_continue(result):
                 break
-            if self.proxy is not None and result in [WatchResults.UNFILLED, WatchResults.NOT_LOADED]:
-                self._check_miss_count()
+            if result in [WatchResults.UNFILLED, WatchResults.NOT_LOADED]:
+                if not self._check_miss_count():
+                    break
             now = datetime.now()
             next_watch = now + self.interval
             self.log_info("{} - Waiting until {}(in {}).".format(
@@ -327,10 +332,8 @@ class AdWatcher():
             ))
             event.wait((next_watch - now).total_seconds())
             if event.is_set():
-                self.log_info("Shutting down...")
-                self.print_statistics()
                 self.quit()
-                return
+                break
         self.config.save()
         self.log_info("Stopped ad watching.")
         self.print_statistics()
@@ -393,23 +396,34 @@ class AdWatcher():
         return True
 
     def _check_miss_count(self):
-        """Checks whether the proxy should be abandoned based on the continued unfilled counts."""
+        """Checks whether the proxy should be abandoned based on the continued unfilled counts.
+
+        :return: Whether continuing to watch ads makes sense or not.
+        :rtype: bool
+        """
         if self.got_first_fullfilled:
-            self.continued_unfilleds = 0
+            self.continued_unfilleds = 1
+            self.got_first_fullfilled = False
+            return True
         else:
             self.continued_unfilleds += 1
             if self.continued_unfilleds >= self.config[Keys.ABANDON_AFTER]:
-                self.proxy[Keys.ABANDONED] = True
-                self.continued_unfilleds = 0
-                self.log_info("No ads received since {} tries. Abandoning proxy.".format(
-                    self.config[Keys.ABANDON_AFTER]
-                ))
                 self.got_first_fullfilled = False
+                if self.proxy is not None:
+                    self.proxy[Keys.ABANDONED] = True
+                    self.continued_unfilleds = 0
+                    self.log_info("No ads received since {} tries. Abandoning proxy.".format(
+                        self.config[Keys.ABANDON_AFTER]
+                    ))
+                    return True
+                else:
+                    self.log_info("No ads received since {} tries. Stopping.")
+                    return False
 
     def ad_grind_forever(self, event):
         """Keep watching ads forever.
 
-        :param event: Thread event object to control thread
+        :param event: Event object to control thread
         :type event: Event
         """
         while True:
@@ -429,6 +443,7 @@ class AdWatcher():
 
     def quit(self):
         """Quits the currently used browser."""
+        self.log_info("Shutting down browser.")
         self.browser.quit()
 
 
