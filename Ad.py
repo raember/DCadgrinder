@@ -402,8 +402,7 @@ class AdWatcher():
         :rtype: bool
         """
         if self.got_first_fullfilled:
-            self.continued_unfilleds = 1
-            self.got_first_fullfilled = False
+            self.continued_unfilleds = 0
             return True
         else:
             self.continued_unfilleds += 1
